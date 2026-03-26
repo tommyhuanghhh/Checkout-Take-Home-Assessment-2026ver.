@@ -20,3 +20,8 @@ var (
 var (
 	ErrPaymentNotFound = errors.New("payment not found")
 )
+
+// --- Idempotency Errors ---
+var (
+	ErrIdempotencyKeyNotFound = errors.New("idempotency key not found")
+)
