@@ -50,6 +50,8 @@
 - Validation: Hash the incoming request body. If the client sends an existing Idempotency-Key but with a different request body (e.g., changed the amount from $10 to $100), reject it immediately (HTTP 409 Conflict or 400 Bad Request). This prevents malicious reuse of keys.
 - we use json tag to validate http request, and value objects creation to double check(in case requests coming in via gRPC or other non-http protocols)
 
+**Security--Exactly Once**
+
 **Caching and Storage**
 - Client-generated UUID will be the key for Redis storage
 - 
@@ -95,8 +97,13 @@
     - currency
     - amount
 
-
-## Database Design
+**Development Order--Outward**
+1. Domain Layer: Start in internal/domain/. This is pure Go. No libraries, no JSON tags, no HTTP.
+2. Application Layer(Usecase): The "How", the entire application flow lies here
+3. Infrastructure Layer: fulfilling the contracts (interfaces) that the Domain and Use Cases already defined.
+4. Presentation Layer: The "delivery"
+5. main.go& wire.go: Initialize the Logger and Config + Setup the Dependency Injection
+## Storage Design
 **Why RDBMS over NoSQL?**
 - ACID is mission-critical for db transaction, and RDBMS could more easily implement ACID. 
 
@@ -105,6 +112,13 @@
     - Atomicity (A) and Isolation (I) could be achieved with Mutex
     - Consistency (C) will move to Domain Layer
     - Durability (D) is gone
+
+**Why GET payment should ignore the cache?**
+- the GET /v1/payments/{id} API must read directly from the Database (Repository), never the Cache. Here is why I think so:
+1. The Key Mismatch: When the client calls POST /v1/payments, they pass an Idempotency-Key in the HTTP header (e.g., req-abc). This is what the cache uses as its lookup key. But when they call GET /v1/payments/pay_123, they are passing the generated Payment ID. The cache literally has no idea what pay_123 is.
+2. The TTL (Time-to-Live): Idempotency is a temporary shield to prevent double-charging during network hiccups. The keys usually expire after 24 hours. If a merchant calls GET to look up a payment from 3 days ago, the cache will be empty. The database is permanent.
+3. The Source of Truth: If a background process refunds a payment, it updates the database. If I serve GET requests from a stale cache, I will be returning inaccurate financial data.
+
 
 ## Future Scaling & Architecture
 - For the scope of this assessment, the application is packaged by architectural layer (Clean Architecture) with a single, flat Domain package. If this service were to grow to encompass other domains (e.g., Refunds, Disputes), I would transition the structure to 'Package by Feature / Bounded Context' to prevent the Domain and Use Case packages from becoming bloated.
