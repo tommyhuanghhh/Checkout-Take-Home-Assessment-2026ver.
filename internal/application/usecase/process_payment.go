@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"time"
-
+	"errors"
 	"PaymentGateway/internal/domain"
 )
 
-
+// ErrIdempotencyConflict replaces domain.ErrPaymentAlreadyProcessed
+var ErrIdempotencyConflict = errors.New("a request is already in progress for this idempotency key")
 
 // ProcessPaymentCommand represents the input data for the Use Case.
 type ProcessPaymentCommand struct {
@@ -63,7 +64,7 @@ func NewProcessPaymentUseCase(
 
 func (u *ProcessPaymentUseCase) Execute(ctx context.Context, cmd ProcessPaymentCommand) (*ProcessPaymentResult, error) {
 	// --- 1. Idempotency Lock Phase ---
-	locked, err := u.idempotencyStore.SetNX(ctx, cmd.IdempotencyKey, []byte(idempotencyInProgressMarker), 24*time.Hour)
+	locked, err := u.idempotencyStore.SetNX(ctx, cmd.IdempotencyKey, []byte(IdempotencyInProgressMarker), 24*time.Hour)
 	if err != nil {
 		return nil, err
 	}
@@ -74,9 +75,9 @@ func (u *ProcessPaymentUseCase) Execute(ctx context.Context, cmd ProcessPaymentC
 			return nil, err
 		}
 		
-		if string(cachedBytes) == idempotencyInProgressMarker {
+		if string(cachedBytes) == IdempotencyInProgressMarker {
 			// Another request is currently processing this key. Return a Domain Error.
-			return nil, domain.ErrPaymentAlreadyProcessed 
+			return nil, ErrIdempotencyConflict
 		}
 
 		// It finished previously! Unmarshal the cached JSON result and return it immediately.

@@ -12,10 +12,6 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// ============================================================================
-// 1. MOCK DEFINITIONS (The "Test Doubles")
-// ============================================================================
-
 type MockIdempotencyStore struct{ mock.Mock }
 
 func (m *MockIdempotencyStore) SetNX(ctx context.Context, key string, value []byte, ttl time.Duration) (bool, error) {
@@ -63,10 +59,6 @@ func (m *MockBankService) Process(ctx context.Context, amount int64, currency st
 	return args.Bool(0), args.Error(1)
 }
 
-// ============================================================================
-// 2. THE TEST SUITE
-// ============================================================================
-
 func TestProcessPaymentUseCase_Execute(t *testing.T) {
 	// Mathematically valid Luhn PANs mapped to the Bank Simulator rules
 	authorizedPAN := "4242424242424341" // Ends in Odd (1) -> Authorized
@@ -94,7 +86,7 @@ func TestProcessPaymentUseCase_Execute(t *testing.T) {
 
 		// 2. Define Expectations (Strict Order of Operations)
 		// Lock succeeds
-		mockStore.On("SetNX", ctx, "idem_123", []byte(idempotencyInProgressMarker), 24*time.Hour).Return(true, nil)
+		mockStore.On("SetNX", ctx, "idem_123", []byte(IdempotencyInProgressMarker), IdempotencyTTL).Return(true, nil)
 		
 		// ID generated
 		mockIDGen.On("Generate").Return("pay_999")
@@ -106,7 +98,7 @@ func TestProcessPaymentUseCase_Execute(t *testing.T) {
 		mockRepo.On("Save", ctx, mock.AnythingOfType("*domain.Payment")).Return(nil)
 		
 		// Cache overwritten with final JSON
-		mockStore.On("Set", ctx, "idem_123", mock.AnythingOfType("[]uint8"), 24*time.Hour).Return(nil)
+		mockStore.On("Set", ctx, "idem_123", mock.AnythingOfType("[]uint8"), IdempotencyTTL).Return(nil)
 
 		// 3. Execute
 		uc := NewProcessPaymentUseCase(mockRepo, mockStore, mockIDGen, mockBank)
@@ -140,7 +132,7 @@ func TestProcessPaymentUseCase_Execute(t *testing.T) {
 		cachedBytes, _ := json.Marshal(cachedResult)
 
 		// SetNX returns false (lock exists)
-		mockStore.On("SetNX", ctx, "idem_recovered", []byte(idempotencyInProgressMarker), 24*time.Hour).Return(false, nil)
+		mockStore.On("SetNX", ctx, "idem_recovered", []byte(IdempotencyInProgressMarker), IdempotencyTTL).Return(false, nil)
 		// Get returns the JSON
 		mockStore.On("Get", ctx, "idem_recovered").Return(cachedBytes, nil)
 
@@ -165,7 +157,7 @@ func TestProcessPaymentUseCase_Execute(t *testing.T) {
 		}
 
 		// Lock succeeds, but then validation fails immediately
-		mockStore.On("SetNX", ctx, "idem_bad_card", []byte(idempotencyInProgressMarker), 24*time.Hour).Return(true, nil)
+		mockStore.On("SetNX", ctx, "idem_bad_card", []byte(IdempotencyInProgressMarker), IdempotencyTTL).Return(true, nil)
 
 		// Notice we pass `nil` for Repo, Bank, and IDGen to prove they are never invoked
 		uc := NewProcessPaymentUseCase(nil, mockStore, nil, nil)
@@ -195,7 +187,7 @@ func TestProcessPaymentUseCase_Execute(t *testing.T) {
 		}
 
 		// Lock succeeds, ID generates
-		mockStore.On("SetNX", ctx, "idem_declined", []byte(idempotencyInProgressMarker), 24*time.Hour).Return(true, nil)
+		mockStore.On("SetNX", ctx, "idem_declined", []byte(IdempotencyInProgressMarker), IdempotencyTTL).Return(true, nil)
 		mockIDGen.On("Generate").Return("pay_declined_1")
 		
 		// BANK RETURNS FALSE (Declined)
@@ -203,7 +195,7 @@ func TestProcessPaymentUseCase_Execute(t *testing.T) {
 		
 		// We still expect to Save to DB and Set the cache!
 		mockRepo.On("Save", ctx, mock.AnythingOfType("*domain.Payment")).Return(nil)
-		mockStore.On("Set", ctx, "idem_declined", mock.AnythingOfType("[]uint8"), 24*time.Hour).Return(nil)
+		mockStore.On("Set", ctx, "idem_declined", mock.AnythingOfType("[]uint8"), IdempotencyTTL).Return(nil)
 
 		uc := NewProcessPaymentUseCase(mockRepo, mockStore, mockIDGen, mockBank)
 		result, err := uc.Execute(ctx, cmd)
@@ -233,7 +225,7 @@ func TestProcessPaymentUseCase_Execute(t *testing.T) {
 			Currency:       "USD",
 		}
 
-		mockStore.On("SetNX", ctx, "idem_bank_down", []byte(idempotencyInProgressMarker), 24*time.Hour).Return(true, nil)
+		mockStore.On("SetNX", ctx, "idem_bank_down", []byte(IdempotencyInProgressMarker), IdempotencyTTL).Return(true, nil)
 		mockIDGen.On("Generate").Return("pay_err_1")
 		
 		// BANK RETURNS ERROR (e.g., 503 Service Unavailable)
