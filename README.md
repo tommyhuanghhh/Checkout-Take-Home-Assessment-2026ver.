@@ -96,6 +96,7 @@
     - expiry_yesr
     - currency
     - amount
+- Assume GET payment when payment status is pending is impossible
 
 **Development Order--Outward**
 1. Domain Layer: Start in internal/domain/. This is pure Go. No libraries, no JSON tags, no HTTP.
@@ -118,6 +119,7 @@
 1. The Key Mismatch: When the client calls POST /v1/payments, they pass an Idempotency-Key in the HTTP header (e.g., req-abc). This is what the cache uses as its lookup key. But when they call GET /v1/payments/pay_123, they are passing the generated Payment ID. The cache literally has no idea what pay_123 is.
 2. The TTL (Time-to-Live): Idempotency is a temporary shield to prevent double-charging during network hiccups. The keys usually expire after 24 hours. If a merchant calls GET to look up a payment from 3 days ago, the cache will be empty. The database is permanent.
 3. The Source of Truth: If a background process refunds a payment, it updates the database. If I serve GET requests from a stale cache, I will be returning inaccurate financial data.
+
 
 
 ## Future Scaling & Architecture
