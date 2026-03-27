@@ -39,7 +39,7 @@
 - We will have unit tests for each layer.
  
 **Infrastructure Details**
-- connection pools
+- connection pools -->we will have 2 separate connection pools: one for redis, one for http client
 - using context to implement timeout
 - singleflight for cache stampede prevention
 - Cache whenever you can, but dont forget the security issue(PCI DSS)
@@ -102,8 +102,10 @@
 1. Domain Layer: Start in internal/domain/. This is pure Go. No libraries, no JSON tags, no HTTP.
 2. Application Layer(Usecase): The "How", the entire application flow lies here
 3. Infrastructure Layer: fulfilling the contracts (interfaces) that the Domain and Use Cases already defined.
-4. Presentation Layer: The "delivery"
+4. Presentation Layer: The "delivery" (Dont forget to set timeout in context)
+4.5 logging and config file
 5. main.go& wire.go: Initialize the Logger and Config + Setup the Dependency Injection
+6. CI/CD
 ## Storage Design
 **Why RDBMS over NoSQL?**
 - ACID is mission-critical for db transaction, and RDBMS could more easily implement ACID. 
@@ -120,7 +122,12 @@
 2. The TTL (Time-to-Live): Idempotency is a temporary shield to prevent double-charging during network hiccups. The keys usually expire after 24 hours. If a merchant calls GET to look up a payment from 3 days ago, the cache will be empty. The database is permanent.
 3. The Source of Truth: If a background process refunds a payment, it updates the database. If I serve GET requests from a stale cache, I will be returning inaccurate financial data.
 
-
+## CI/CD Design
+**Partial CD plan and config injection**
+- App Code: Expects primitives injected via constructors (like baseURL string).
+- Main.go: Reads Environment Variables and builds a Config struct.
+- Dockerfile: Only builds the Go binary. No config mapping.
+- Docker-Compose: Injects the actual URL strings as environment variables when spinning up the containers
 
 ## Future Scaling & Architecture
 - For the scope of this assessment, the application is packaged by architectural layer (Clean Architecture) with a single, flat Domain package. If this service were to grow to encompass other domains (e.g., Refunds, Disputes), I would transition the structure to 'Package by Feature / Bounded Context' to prevent the Domain and Use Case packages from becoming bloated.
