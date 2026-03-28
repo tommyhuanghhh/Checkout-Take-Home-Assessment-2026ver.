@@ -23,7 +23,19 @@ func NewPaymentHandler(u usecase.PaymentProcessor) *PaymentHandler {
 		useCase: u,
 	}
 }
-
+// ProcessPayment handles the authorization of a new payment.
+// @Summary      Process a payment
+// @Description  Authorizes a payment through the acquiring bank simulator. Requires a unique Idempotency-Key header for safe retries.
+// @Tags         Payments
+// @Accept       json
+// @Produce      json
+// @Param        Idempotency-Key header string true "Idempotency Key (UUID) for safe retries"
+// @Param        request body dto.PostPaymentRequest true "Payment Request details (Card info, amount, currency)"
+// @Success      201  {object}  dto.PostPaymentResponse
+// @Failure      400  {object}  map[string]string "Bad Request - Invalid input"
+// @Failure      409  {object}  map[string]string "Conflict - Idempotency Key already used for a different request"
+// @Failure      500  {object}  map[string]string "Internal Server Error"
+// @Router       /v1/payments [post]
 func (h *PaymentHandler) ProcessPayment(c *gin.Context) {
 	// 1. Set a hard timeout for the entire request lifecycle (e.g., 10 seconds).
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
