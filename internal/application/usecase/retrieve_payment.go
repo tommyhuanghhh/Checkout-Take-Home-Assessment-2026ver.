@@ -6,6 +6,11 @@ import (
 	"PaymentGateway/internal/domain"
 )
 
+// Inside application/usecase/retrieve_payment.go
+type PaymentRetriever interface {
+    Execute(ctx context.Context, query RetrievePaymentCommand) (*RetrievePaymentResult, error)
+}
+
 type RetrievePaymentCommand struct {
 	ID string
 }
@@ -23,6 +28,8 @@ type RetrievePaymentResult struct {
 type RetrievePaymentUseCase struct {
 	repo domain.PaymentRepository
 }
+
+var _ PaymentRetriever = (*RetrievePaymentUseCase)(nil)
 
 func NewRetrievePaymentUseCase(repo domain.PaymentRepository) *RetrievePaymentUseCase {
 	return &RetrievePaymentUseCase{
