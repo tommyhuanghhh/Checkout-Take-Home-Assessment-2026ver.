@@ -15,10 +15,10 @@ import (
 )
 
 type PaymentHandler struct {
-	useCase usecase.ProcessPaymentUseCase
+	useCase usecase.PaymentProcessor
 }
 
-func NewPaymentHandler(u usecase.ProcessPaymentUseCase) *PaymentHandler {
+func NewPaymentHandler(u usecase.PaymentProcessor) *PaymentHandler {
 	return &PaymentHandler{
 		useCase: u,
 	}
