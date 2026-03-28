@@ -11,11 +11,16 @@ import (
 	"time"
 
 	"PaymentGateway/internal/pkg/config"
-
+	_ "PaymentGateway/docs"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 )
-
+// @title           Payment Gateway API
+// @version         1.0
+// @description     A highly available, PCI-compliant Payment Gateway API for processing and retrieving payments.
+// @contact.name    API Support
+// @host            localhost:8090
+// @BasePath        /
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	

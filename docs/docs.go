@@ -9,22 +9,124 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "contact": {},
+        "contact": {
+            "name": "API Support"
+        },
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/ping": {
-            "get": {
+        "/v1/payments": {
+            "post": {
+                "description": "Authorizes a payment through the acquiring bank simulator. Requires a unique Idempotency-Key header for safe retries.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Process a payment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Idempotency Key (UUID) for safe retries",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Payment Request details (Card info, amount, currency)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/PaymentGateway_internal_presentation_rest_dto.PostPaymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/PaymentGateway_internal_presentation_rest_dto.PostPaymentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request - Invalid input",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict - Idempotency Key already used for a different request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/payments/{id}": {
+            "get": {
+                "description": "Gets the details, masked card numbers, and status of a previously processed payment using its unique ID.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Retrieve a payment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Unique Payment ID (e.g., pay_123xyz)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/main.Pong"
+                            "$ref": "#/definitions/PaymentGateway_internal_presentation_rest_dto.GetPaymentResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found - Payment does not exist",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -32,30 +134,113 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "main.Pong": {
+        "PaymentGateway_internal_presentation_rest_dto.GetPaymentResponse": {
             "type": "object",
             "properties": {
-                "message": {
+                "amount": {
+                    "type": "integer"
+                },
+                "card_number_last_four": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "expiry_month": {
+                    "type": "integer"
+                },
+                "expiry_year": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "payment_status": {
                     "type": "string"
                 }
             }
-        }
-    },
-    "securityDefinitions": {
-        "BasicAuth": {
-            "type": "basic"
+        },
+        "PaymentGateway_internal_presentation_rest_dto.PostPaymentRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "card_number",
+                "currency",
+                "cvv",
+                "expiry_month",
+                "expiry_year"
+            ],
+            "properties": {
+                "amount": {
+                    "description": "Validation: Required, must be greater than 0 (minor units/cents).",
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "card_number": {
+                    "description": "Validation: Required, must be numbers only, between 14 and 19 digits.",
+                    "type": "string"
+                },
+                "currency": {
+                    "description": "Validation: Required, exactly 3 alphabetical characters (e.g., \"USD\", \"GBP\").",
+                    "type": "string"
+                },
+                "cvv": {
+                    "description": "Validation: Required, 3 to 4 numeric digits.",
+                    "type": "string",
+                    "maxLength": 4,
+                    "minLength": 3
+                },
+                "expiry_month": {
+                    "description": "Validation: Required, standard 1-12 months.",
+                    "type": "integer",
+                    "maximum": 12,
+                    "minimum": 1
+                },
+                "expiry_year": {
+                    "description": "Validation: Required, must be at least the current year",
+                    "type": "integer",
+                    "minimum": 2026
+                }
+            }
+        },
+        "PaymentGateway_internal_presentation_rest_dto.PostPaymentResponse": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "integer"
+                },
+                "card_number_last_four": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "expiry_month": {
+                    "type": "integer"
+                },
+                "expiry_year": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "payment_status": {
+                    "description": "\"Authorized\", \"Declined\", \"Rejected\"",
+                    "type": "string"
+                }
+            }
         }
     }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "",
+	Version:          "1.0",
 	Host:             "localhost:8090",
 	BasePath:         "/",
 	Schemes:          []string{},
-	Title:            "Payment Gateway Challenge Go",
-	Description:      "Interview challenge for building a Payment Gateway - Go version",
+	Title:            "Payment Gateway API",
+	Description:      "A highly available, PCI-compliant Payment Gateway API for processing and retrieving payments.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

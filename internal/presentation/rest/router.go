@@ -7,6 +7,8 @@ import (
 	"PaymentGateway/internal/presentation/rest/middleware"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 // NewRouter constructs the Gin engine, attaches global middleware,
@@ -29,6 +31,10 @@ func NewRouter(
 	router.Use(gin.Recovery())
 	// 2. Our custom structured, PCI-compliant JSON access logger.
 	router.Use(middleware.AccessLogger(logger))
+
+	// --- Swagger Documentation ---
+	// This wildcard route catches requests for the UI, CSS, and JS files
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// 1. Create the API Version group
 	v1 := router.Group("/v1")
