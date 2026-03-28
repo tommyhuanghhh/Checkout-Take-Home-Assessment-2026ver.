@@ -49,7 +49,7 @@ func run(logger *slog.Logger, cfg *config.Config) error {
 	defer redisClient.Close()
 
 	// 3. Initialize the Dependency Graph (Composition Root via Wire)
-	router:= InitializeRouter(logger, redisClient, httpClient, cfg.BankSimulatorURL)
+	router, err := InitializeAPI(logger, redisClient, httpClient, cfg.BankSimulatorURL)
 	if err != nil {
 		return fmt.Errorf("failed to initialize api: %w", err)
 	}
