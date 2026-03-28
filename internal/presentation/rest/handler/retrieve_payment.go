@@ -23,7 +23,16 @@ func NewRetrievePaymentHandler(u usecase.PaymentRetriever) *RetrievePaymentHandl
 		useCase: u,
 	}
 }
-
+// RetrievePayment fetches the details of an existing payment.
+// @Summary      Retrieve a payment
+// @Description  Gets the details, masked card numbers, and status of a previously processed payment using its unique ID.
+// @Tags         Payments
+// @Produce      json
+// @Param        id   path      string  true  "Unique Payment ID (e.g., pay_123xyz)"
+// @Success      200  {object}  dto.GetPaymentResponse
+// @Failure      404  {object}  map[string]string "Not Found - Payment does not exist"
+// @Failure      500  {object}  map[string]string "Internal Server Error"
+// @Router       /v1/payments/{id} [get]
 func (h *RetrievePaymentHandler) RetrievePayment(c *gin.Context) {
 	// 1. Set a strict timeout for the database read operation (e.g., 5 seconds).
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
