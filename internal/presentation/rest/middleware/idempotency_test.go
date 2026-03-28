@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"PaymentGateway/internal/presentation/rest"
+	"PaymentGateway/internal/presentation/rest/constant"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -23,7 +23,7 @@ func TestRequireIdempotencyKey(t *testing.T) {
 
 	t.Run("Header Present - Allows Request", func(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodPost, "/test", nil)
-		req.Header.Set(rest.HeaderIdempotencyKey, "idem_123")
+		req.Header.Set(constant.HeaderIdempotencyKey, "idem_123")
 		
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)

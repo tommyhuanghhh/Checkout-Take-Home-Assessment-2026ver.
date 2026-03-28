@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"PaymentGateway/internal/application/usecase"
-	"PaymentGateway/internal/presentation/rest"
+	"PaymentGateway/internal/presentation/rest/constant"
 	"PaymentGateway/internal/presentation/rest/dto"
 	"PaymentGateway/internal/presentation/rest/middleware"
 
@@ -68,7 +68,7 @@ func TestPaymentHandler_ProcessPayment(t *testing.T) {
 
 		body, _ := json.Marshal(validDTO)
 		req, _ := http.NewRequest(http.MethodPost, "/payments", bytes.NewBuffer(body))
-		req.Header.Set(rest.HeaderIdempotencyKey, "test-key")
+		req.Header.Set(constant.HeaderIdempotencyKey, "test-key")
 		req.Header.Set("Content-Type", "application/json")
 
 		w := httptest.NewRecorder()
@@ -110,7 +110,7 @@ func TestPaymentHandler_ProcessPayment(t *testing.T) {
 
 		body, _ := json.Marshal(invalidDTO)
 		req, _ := http.NewRequest(http.MethodPost, "/payments", bytes.NewBuffer(body))
-		req.Header.Set(rest.HeaderIdempotencyKey, "test-key")
+		req.Header.Set(constant.HeaderIdempotencyKey, "test-key")
 
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -129,7 +129,7 @@ func TestPaymentHandler_ProcessPayment(t *testing.T) {
 
 		body, _ := json.Marshal(validDTO)
 		req, _ := http.NewRequest(http.MethodPost, "/payments", bytes.NewBuffer(body))
-		req.Header.Set(rest.HeaderIdempotencyKey, "test-key")
+		req.Header.Set(constant.HeaderIdempotencyKey, "test-key")
 
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)

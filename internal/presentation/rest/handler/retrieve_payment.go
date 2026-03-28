@@ -8,7 +8,7 @@ import (
 
 	"PaymentGateway/internal/application/usecase"
 	"PaymentGateway/internal/domain"
-	"PaymentGateway/internal/presentation/rest"
+	"PaymentGateway/internal/presentation/rest/constant"
 	"PaymentGateway/internal/presentation/rest/dto"
 
 	"github.com/gin-gonic/gin"
@@ -30,7 +30,7 @@ func (h *RetrievePaymentHandler) RetrievePayment(c *gin.Context) {
 	defer cancel()
 
 	// 2. Extract the Payment ID from the Gin URL parameter
-	id := c.Param(rest.URLParamID)
+	id := c.Param(constant.URLParamID)
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payment ID parameter is required"})
 		return
