@@ -20,7 +20,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.0' # Matches your go.mod
+          go-version: '1.25.x' # Matches your go.mod
           cache: true          # Speeds up subsequent runs by caching dependencies
 
       - name: Install Dependencies
