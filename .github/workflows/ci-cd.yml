@@ -1,0 +1,101 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - '**' # Triggers automatically on ANY branch
+  workflow_dispatch: 
+
+jobs:
+  build-scan-and-push:
+    name: Lint, Test, Scan, Build, and Push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.0'
+          cache: true
+
+      - name: Install Dependencies
+        run: go mod download
+
+      # 1. Code Quality & Testing
+      - name: Run GolangCI-Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+
+      - name: Run Unit Tests
+        run: go test -v -race ./...
+
+      # 2. Go Source Code Vulnerability Scanning
+      - name: Run Go Vulnerability Checker
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: '1.25.0'
+
+      # 3. Docker Build Setup
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 4. Generate custom tag AND safely handle the 'latest' tag
+      - name: Generate Custom Image Tag
+        run: |
+          DATE_STR=$(date +'%Y%m%d')
+          RUN_NUM=$(printf "%02d" ${{ github.run_number }})
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          
+          IMAGE_TAG="${DATE_STR}-${RUN_NUM}-${SHORT_SHA}"
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+          
+          # Base tag for the current commit
+          DOCKER_TAGS="tommyhuanghhh/paymentgateway-gateway:${IMAGE_TAG}"
+          
+          # ONLY append the 'latest' tag if this build is happening on the main branch
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            DOCKER_TAGS="${DOCKER_TAGS},tommyhuanghhh/paymentgateway-gateway:latest"
+          fi
+          
+          echo "DOCKER_TAGS=${DOCKER_TAGS}" >> $GITHUB_ENV
+
+      # 5. Build and Load Image Locally
+      - name: Build Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true 
+          tags: tommyhuanghhh/paymentgateway-gateway:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 6. OS and Library Vulnerability Scanning
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'tommyhuanghhh/paymentgateway-gateway:${{ env.IMAGE_TAG }}'
+          format: 'table'
+          exit-code: '1' 
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      # 7. Push to Docker Hub
+      - name: Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.DOCKER_TAGS }} # Uses the safely constructed tags from step 4
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
