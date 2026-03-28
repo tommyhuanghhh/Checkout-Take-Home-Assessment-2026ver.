@@ -2,120 +2,95 @@ package main
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"PaymentGateway/internal/pkg/config"
+
+	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 )
 
 func main() {
-	// 1. Setup Structured Logger
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	
+	cfg := config.Load()
 
-	if err := run(logger); err != nil {
+	if err := run(logger, cfg); err != nil {
 		logger.Error("server exited with error", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(logger *slog.Logger) error {
-	// ==========================================
-	// 1. HTTP Client Connection Pool Setup
-	// ==========================================
-	customTransport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   10 * time.Second,
-			KeepAlive: 30 * time.Second, // Explicitly enables TCP Keep-Alive
-		}).DialContext,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100,              // Total idle connections across all hosts
-		MaxIdleConnsPerHost:   100,              // Max idle connections per specific host (e.g., our acquiring bank)
-		IdleConnTimeout:       90 * time.Second, // How long an idle connection stays in the pool before closing
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-	}
-
+func run(logger *slog.Logger, cfg *config.Config) error {
+	// 1. HTTP Client for the Bank Simulator
 	httpClient := &http.Client{
-		Timeout:   15 * time.Second, // Overall request timeout (including reading response)
-		Transport: customTransport,
+		Timeout: 5 * time.Second,
 	}
 
-	// ==========================================
-	// 2. Redis Connection Pool Setup
-	// ==========================================
+	// 2. Spin up In-Memory miniredis for zero-dependency idempotency
+	mr, err := miniredis.Run()
+	if err != nil {
+		return fmt.Errorf("failed to start miniredis: %w", err)
+	}
+	defer mr.Close() // Ensure it cleans up when the app shuts down
+
+	logger.Info("started in-memory miniredis", slog.String("addr", mr.Addr()))
+
+	// Connect the actual go-redis client to the miniredis instance
 	redisClient := redis.NewClient(&redis.Options{
-		Addr:            "localhost:6379", // Point this to your miniredis/local redis
-		PoolSize:        50,               // Maximum number of socket connections
-		MinIdleConns:    10,               // Minimum number of idle connections to keep open
-		ConnMaxIdleTime: 5 * time.Minute,  // How long a connection can be idle before closing
-		ConnMaxLifetime: 1 * time.Hour,    // Absolute max lifetime of a connection
+		Addr: mr.Addr(),
 	})
+	defer redisClient.Close()
 
-	// Verify Redis connection on startup
-	startupCtx, startupCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer startupCancel()
-	if err := redisClient.Ping(startupCtx).Err(); err != nil {
-		return errors.New("failed to connect to redis: " + err.Error())
+	// 3. Initialize the Dependency Graph (Composition Root via Wire)
+	router:= InitializeRouter(logger, redisClient, httpClient, cfg.BankSimulatorURL)
+	if err != nil {
+		return fmt.Errorf("failed to initialize api: %w", err)
 	}
-	logger.Info("Successfully connected to Redis")
 
-	// ==========================================
-	// 3. Dependency Wiring (Wire package)
-	// ==========================================
-	bankSimulatorURL := "http://localhost:8080"
-	router := InitializeRouter(logger, redisClient, httpClient, bankSimulatorURL)
-
-	// ==========================================
-	// 4. Server Configuration & Startup
-	// ==========================================
+	// 4. Configure HTTP Server
 	srv := &http.Server{
-		Addr:         ":8090",
+		Addr:         ":" + cfg.ServerPort,
 		Handler:      router,
-		ReadTimeout:  10 * time.Second, // Defend against slow-loris attacks
+		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
 
-	// Channel to listen for OS shutdown signals
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-
-	// Start server in a goroutine so it doesn't block
+	// 5. Graceful Shutdown Setup
+	serverErrors := make(chan error, 1)
 	go func() {
-		logger.Info("Starting Payment Gateway API", "port", 8090)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("server failed to start", "error", err)
-			os.Exit(1)
-		}
+		logger.Info("starting server", slog.String("port", cfg.ServerPort))
+		serverErrors <- srv.ListenAndServe()
 	}()
 
-	// ==========================================
-	// 5. Graceful Shutdown Sequence
-	// ==========================================
-	<-quit // Block here until we receive SIGTERM or SIGINT
-	logger.Info("Shutdown signal received, initiating graceful shutdown...")
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
-	// Give active requests 10 seconds to finish before force-closing
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer shutdownCancel()
+	// 6. Block waiting for signal or server error
+	select {
+	case err := <-serverErrors:
+		return fmt.Errorf("server error: %w", err)
 
-	// Cleanup Redis connection pool
-	if err := redisClient.Close(); err != nil {
-		logger.Error("failed to cleanly close redis pool", "error", err)
+	case sig := <-shutdown:
+		logger.Info("graceful shutdown initiated", slog.String("signal", sig.String()))
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := srv.Shutdown(ctx); err != nil {
+			if err := srv.Close(); err != nil {
+				return fmt.Errorf("could not stop server gracefully: %w", err)
+			}
+		}
 	}
 
-	// Shutdown HTTP Server
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return errors.New("server forced to shutdown: " + err.Error())
-	}
-
-	logger.Info("Server exited gracefully")
+	logger.Info("server shutdown complete")
 	return nil
 }
