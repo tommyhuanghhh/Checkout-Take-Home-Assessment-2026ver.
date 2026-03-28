@@ -76,7 +76,8 @@ func TestPaymentHandler_ProcessPayment(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, w.Code)
 		var resp dto.PostPaymentResponse
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		assert.NoError(t, err) 
 		assert.Equal(t, "pay_123", resp.Id)
 		m.AssertExpectations(t)
 	})

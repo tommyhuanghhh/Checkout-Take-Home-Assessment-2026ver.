@@ -18,6 +18,9 @@ FROM alpine:latest
 
 WORKDIR /app
 
+# FIX: Force Alpine to download and apply the newest security patches for OS packages (like zlib)
+RUN apk --no-cache upgrade
+
 # Copy only the compiled binary from the builder stage
 COPY --from=builder /payment-gateway .
 
