@@ -26,22 +26,17 @@ func NewPaymentHandler(u usecase.PaymentProcessor) *PaymentHandler {
 
 func (h *PaymentHandler) ProcessPayment(c *gin.Context) {
 	// 1. Set a hard timeout for the entire request lifecycle (e.g., 10 seconds).
-	// This ensures we don't hang the client if downstream services are unresponsive.
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	// 2. Extract Idempotency Key (Required for Phase 1 Validation)
+	// 2. Extract Idempotency Key
+	// Note: We no longer need to check if this is empty. The RequireIdempotencyKey 
+	// middleware mathematically guarantees this header exists before this handler is ever called.
 	idempotencyKey := c.GetHeader(rest.HeaderIdempotencyKey)
-	if idempotencyKey == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Idempotency-Key header is required"})
-		return
-	}
 
 	// 3. Bind and Validate JSON DTO
 	var req dto.PostPaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		// Gin uses validator v10 under the hood; this catches bad cards, 
-		// invalid currencies, and malformed JSON before hitting our Use Case.
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -53,7 +48,7 @@ func (h *PaymentHandler) ProcessPayment(c *gin.Context) {
 		ExpiryMonth:    req.ExpiryMonth,
 		ExpiryYear:     req.ExpiryYear,
 		CVV:            req.Cvv,
-		Amount:         int64(req.Amount), // Cast to int64 as required by usecase
+		Amount:         int64(req.Amount), 
 		Currency:       req.Currency,
 	}
 
@@ -93,7 +88,6 @@ func (h *PaymentHandler) handleError(c *gin.Context, err error) {
 		c.JSON(http.StatusGatewayTimeout, gin.H{"error": "request timed out"})
 
 	default:
-		// Log the actual error here in a real app
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 	}
 }
