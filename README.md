@@ -84,6 +84,7 @@ The project is containerized for a friction-free setup.
 The API is exposed on port 8090.
 
 1. Process a Payment (POST)
+
 `
 curl -X POST http://localhost:8090/v1/payments \
   -H "Content-Type: application/json" \
@@ -99,9 +100,14 @@ curl -X POST http://localhost:8090/v1/payments \
 `
 
 2. Retrieve a Payment (GET)
+
 `
 curl -X GET http://localhost:8090/v1/payments/<PAYMENT_ID_FROM_POST_RESPONSE>
 `
+3. swagger doc
 
+`
+curl -X GET http://localhost:8090/swagger/index.html
+`
 **Step 3: Test Idempotency**
 Run the exact same POST command from Step 1 again. The response will be returned instantly from the cache, bypassing the Bank Simulator.
