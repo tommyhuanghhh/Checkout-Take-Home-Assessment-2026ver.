@@ -36,7 +36,7 @@ func TestSimulatorClient_Process(t *testing.T) {
 
 			// Return a successful bank response
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"authorized": true, "authorization_code": "auth_123"}`))
+			_, _ = w.Write([]byte(`{"authorized": true, "authorization_code": "auth_123"}`))
 		}))
 		defer server.Close() // Shut down the server when the test finishes
 
