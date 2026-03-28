@@ -24,11 +24,11 @@ jobs:
         run: go mod download
 
       # 1. Code Quality & Testing
-      - name: Run GolangCI-Lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          args: --timeout=5m
+      # 1. Code Quality & Testing
+      - name: Install and Run GolangCI-Lint
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          golangci-lint run --timeout=5m
 
       - name: Run Unit Tests
         run: go test -v -race ./...
