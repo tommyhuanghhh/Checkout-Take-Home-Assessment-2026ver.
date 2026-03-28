@@ -8,7 +8,7 @@ import (
 
 	"PaymentGateway/internal/application/usecase"
 	"PaymentGateway/internal/domain"
-	"PaymentGateway/internal/presentation/rest"
+	"PaymentGateway/internal/presentation/rest/constant"
 	"PaymentGateway/internal/presentation/rest/dto"
 
 	"github.com/gin-gonic/gin"
@@ -32,7 +32,7 @@ func (h *PaymentHandler) ProcessPayment(c *gin.Context) {
 	// 2. Extract Idempotency Key
 	// Note: We no longer need to check if this is empty. The RequireIdempotencyKey 
 	// middleware mathematically guarantees this header exists before this handler is ever called.
-	idempotencyKey := c.GetHeader(rest.HeaderIdempotencyKey)
+	idempotencyKey := c.GetHeader(constant.HeaderIdempotencyKey)
 
 	// 3. Bind and Validate JSON DTO
 	var req dto.PostPaymentRequest
@@ -70,7 +70,7 @@ func (h *PaymentHandler) ProcessPayment(c *gin.Context) {
 		Amount:             int(result.Amount),
 	}
 
-	c.Set(rest.ContextKeyPaymentID, result.ID)
+	c.Set(constant.ContextKeyPaymentID, result.ID)
 	c.JSON(http.StatusCreated, resp)
 }
 

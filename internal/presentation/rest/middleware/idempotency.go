@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"PaymentGateway/internal/presentation/rest"
+	"PaymentGateway/internal/presentation/rest/constant"
 
 	"github.com/gin-gonic/gin"
 )
@@ -12,7 +12,7 @@ import (
 // If it is missing, it immediately aborts the request with a 400 Bad Request.
 func RequireIdempotencyKey() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		idempotencyKey := c.GetHeader(rest.HeaderIdempotencyKey)
+		idempotencyKey := c.GetHeader(constant.HeaderIdempotencyKey)
 		
 		if idempotencyKey == "" {
 			// AbortWithStatusJSON prevents any downstream handlers or Use Cases from executing

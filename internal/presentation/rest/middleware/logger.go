@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"time"
 
-	"PaymentGateway/internal/presentation/rest"
+	"PaymentGateway/internal/presentation/rest/constant"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,11 +24,11 @@ func AccessLogger(logger *slog.Logger) gin.HandlerFunc {
 		clientIP := c.ClientIP()
 
 		// 3. Extract Correlation IDs
-		idempotencyKey := c.GetHeader(rest.HeaderIdempotencyKey)
+		idempotencyKey := c.GetHeader(constant.HeaderIdempotencyKey)
 		
-		paymentID := c.Param(rest.URLParamID)
+		paymentID := c.Param(constant.URLParamID)
 		if paymentID == "" {
-			paymentID = c.GetString(rest.ContextKeyPaymentID) 
+			paymentID = c.GetString(constant.ContextKeyPaymentID) 
 		}
 
 		errs := c.Errors.ByType(gin.ErrorTypePrivate).String()
@@ -42,21 +42,21 @@ func AccessLogger(logger *slog.Logger) gin.HandlerFunc {
 
 		// 4. Build the log attributes dynamically using unified semantic keys
 		attrs := []any{
-			slog.String(rest.LogFieldMethod, method),
-			slog.String(rest.LogFieldPath, path),
-			slog.Int(rest.LogFieldStatus, status),
-			slog.Duration(rest.LogFieldLatency, latency),
-			slog.String(rest.LogFieldClientIP, clientIP),
+			slog.String(constant.LogFieldMethod, method),
+			slog.String(constant.LogFieldPath, path),
+			slog.Int(constant.LogFieldStatus, status),
+			slog.Duration(constant.LogFieldLatency, latency),
+			slog.String(constant.LogFieldClientIP, clientIP),
 		}
 
 		if idempotencyKey != "" {
-			attrs = append(attrs, slog.String(rest.LogFieldIdempotencyKey, idempotencyKey))
+			attrs = append(attrs, slog.String(constant.LogFieldIdempotencyKey, idempotencyKey))
 		}
 		if paymentID != "" {
-			attrs = append(attrs, slog.String(rest.LogFieldPaymentID, paymentID))
+			attrs = append(attrs, slog.String(constant.LogFieldPaymentID, paymentID))
 		}
 		if errs != "" {
-			attrs = append(attrs, slog.String(rest.LogFieldErrors, errs))
+			attrs = append(attrs, slog.String(constant.LogFieldErrors, errs))
 		}
 
 		// 5. Write the structured log
