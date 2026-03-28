@@ -3,7 +3,8 @@ version: "3.8"
 services:
   # 1. The Payment Gateway API
   api:
-    build: .
+    image: tommyhuanghhh/paymentgateway-gateway:latest # Replaced "build: ."
+    pull_policy: always # Ensures Docker always checks for the latest push
     ports:
       - "8090:8090"
     environment:
