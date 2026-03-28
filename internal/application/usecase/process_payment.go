@@ -11,6 +11,10 @@ import (
 // ErrIdempotencyConflict replaces domain.ErrPaymentAlreadyProcessed
 var ErrIdempotencyConflict = errors.New("a request is already in progress for this idempotency key")
 
+type PaymentProcessor interface {
+    Execute(ctx context.Context, cmd ProcessPaymentCommand) (*ProcessPaymentResult, error)
+}
+
 // ProcessPaymentCommand represents the input data for the Use Case.
 type ProcessPaymentCommand struct {
 	IdempotencyKey string
@@ -47,6 +51,9 @@ type ProcessPaymentUseCase struct {
 	idGenerator      domain.IDGenerator
 	bankService      BankService
 }
+
+// 3. Build-time check
+var _ PaymentProcessor = (*ProcessPaymentUseCase)(nil)
 
 func NewProcessPaymentUseCase(
 	repo domain.PaymentRepository,
