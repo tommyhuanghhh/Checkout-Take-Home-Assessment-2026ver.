@@ -21,8 +21,9 @@ import (
 
 // Injectors from wire.go:
 
-// InitializeRouter wires up the dependencies and returns a configured Gin engine.
-func InitializeRouter(logger *slog.Logger, redisClient *redis.Client, httpClient *http.Client, bankSimulatorURL string) *gin.Engine {
+// InitializeAPI sets up the entire application dependency graph (Composition Root).
+// It takes the fundamental external dependencies and returns a fully wired *gin.Engine ready to run.
+func InitializeAPI(logger *slog.Logger, redisClient *redis.Client, httpClient *http.Client, bankSimulatorURL string) (*gin.Engine, error) {
 	inMemoryPaymentRepository := inmemory.NewInMemoryPaymentRepository()
 	redisIdempotencyStore := inmemory.NewRedisIdempotencyStore(redisClient)
 	uuidGenerator := uuid.NewUUIDGenerator()
@@ -32,5 +33,5 @@ func InitializeRouter(logger *slog.Logger, redisClient *redis.Client, httpClient
 	retrievePaymentUseCase := usecase.NewRetrievePaymentUseCase(inMemoryPaymentRepository)
 	retrievePaymentHandler := handler.NewRetrievePaymentHandler(retrievePaymentUseCase)
 	engine := rest.NewRouter(logger, paymentHandler, retrievePaymentHandler)
-	return engine
+	return engine, nil
 }

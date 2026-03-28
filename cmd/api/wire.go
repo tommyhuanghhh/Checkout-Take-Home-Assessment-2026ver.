@@ -20,13 +20,14 @@ import (
 	"PaymentGateway/internal/presentation/rest/handler"
 )
 
-// InitializeRouter wires up the dependencies and returns a configured Gin engine.
-func InitializeRouter(
+// InitializeAPI sets up the entire application dependency graph (Composition Root).
+// It takes the fundamental external dependencies and returns a fully wired *gin.Engine ready to run.
+func InitializeAPI(
 	logger *slog.Logger,
 	redisClient *redis.Client,
 	httpClient *http.Client,
-	bankSimulatorURL string, // This maps directly to the 'baseURL' param in NewSimulatorClient
-) *gin.Engine {
+	bankSimulatorURL string,
+) (*gin.Engine, error) {
 	wire.Build(
 		// 1. Presentation Layer
 		rest.NewRouter,
@@ -53,5 +54,7 @@ func InitializeRouter(
 		acquiring_bank.NewSimulatorClient,
 		wire.Bind(new(usecase.BankService), new(*acquiring_bank.SimulatorClient)),
 	)
-	return nil
+	
+	// Wire requires dummy return values matching the signature.
+	return nil, nil
 }
