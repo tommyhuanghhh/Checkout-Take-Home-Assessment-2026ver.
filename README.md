@@ -1,133 +1,107 @@
-# Checkout-Take-Home-Assessment-2026ver.
+# Checkout Take-Home Assessment (2026) - Payment Gateway
 
-## Requirements Summary
+## 1. Requirements Summary
+Goal: Build an API-based Payment Gateway application that processes payments and retrieves payment details.
 
-**Goal:** Build an API-based Payment Gateway application that processes payments and retrieves payment details.
+- Core Features:
 
-**Core Features:**
-1. **Process a Payment:** Accept payment requests and validate inputs (card number, expiry date, currency, amount, CVV). Forward the request to an acquiring bank (via the simulator).
-2. **Retrieve Payment Details:** Allow clients to fetch details of a previously processed payment.
-3. **Bank Simulator Integration:** The payment gateway must interact with a provided Bank Simulator to process the payments.
+    - Process a Payment: Accept payment requests and validate inputs (card number, expiry date, currency, amount, CVV). Forward the request to an acquiring bank (via the simulator).
 
-**Go-Specific Constraints & Notes:**
-- Work off the skeleton Payment Gateway API provided.
-- **DO NOT** modify the `imposters/` directory (which contains the bank simulator configuration).
-- **DO NOT** modify the `.editorconfig` file to ensure consistent code formatting.
-- You are free to change the project structure (which fits perfectly with our plan to use Clean Architecture) and use your preferred test libraries.
-- The project is set up with Swaggo for API auto-documentation. Swagger UI will be available at `http://localhost:8090/swagger/index.html`.
+    - Retrieve Payment Details: Allow clients to fetch details of a previously processed payment.
 
-**Assessment Criteria & Expectations:**
-- The code must compile and run successfully.
-- The solution must include automated tests.
-- Code should demonstrate simplicity, maintainability, and good API design principles.
+    - Bank Simulator Integration: Interaction with a provided Bank Simulator to process the payments.
 
-## Architectural Requirement and Design
+- Constraints & Notes:
+
+    - Work off the provided skeleton API.
+
+    - DO NOT modify the imposters/ directory or .editorconfig.
+
+    - Freedom to structure the project, apply architectural patterns, and choose testing libraries.
+
+    - The solution must compile, run, and include automated tests.
+
+## 2. Architecture: Conforming to Clean Architecture
+This project strictly adheres to Clean Architecture (specifically the Ports and Adapters / Hexagonal pattern), ensuring business logic is decoupled from external frameworks.
+
 **Project Structure**
-- This project would follow Clean Architecture principles.
-- There will be presentation layer, application layer, infrastructure layer, and domain layer
-- We should 
-- Presentation layer will contain the handlers, models for request and response, middleware, and 
-- Application layer handles application logic. It will contain usecases, 
-- Domain layer
-- Infrastructure layer
+- internal/domain (Enterprise Business Rules): Pure Go. Contains core entities (Payment, Card, Money) and custom domain errors. Defines "Output Ports" (Interfaces) for repositories.
 
-**Dependency and Interfaces**
-- We follow the Dependency Inversion principles, which means we will have interfaces for each layer, and we only depend on interfaces.
-- We use Wire to automatically complete the Dependency Injection.
+- internal/application/usecase (Application Business Rules): Orchestrates data flow. Defines "Input Ports" (PaymentProcessor, PaymentRetriever) called by the Presentation layer.
 
-**Unit Test**
-- We will have unit tests for each layer.
- 
-**Infrastructure Details**
-- connection pools -->we will have 2 separate connection pools: one for redis, one for http client
-- using context to implement timeout
-- singleflight for cache stampede prevention
-- Cache whenever you can, but dont forget the security issue(PCI DSS)
-- Limit goroutine with worker pool
+- internal/infrastructure (Adapters): Implements Domain interfaces. Contains the HTTP client for the Acquiring Bank, in-memory database, and UUID generator.
 
-**Security--PCI DSS Compliant**
-- We assume client must provide idempotency key with each request
-- Validation: Hash the incoming request body. If the client sends an existing Idempotency-Key but with a different request body (e.g., changed the amount from $10 to $100), reject it immediately (HTTP 409 Conflict or 400 Bad Request). This prevents malicious reuse of keys.
-- we use json tag to validate http request, and value objects creation to double check(in case requests coming in via gRPC or other non-http protocols)
+- internal/presentation/rest (Delivery Mechanism): The HTTP layer (built with Gin). Translates web requests into Application Commands.
 
-**Security--Exactly Once**
+- cmd/api (Composition Root): Uses Google Wire to inject dependencies and wire layers together before booting the server.
 
-**Caching and Storage**
-- Client-generated UUID will be the key for Redis storage
-- 
 
-**Interface and Build-Time Check**
-- Placement:
-- Ensure Build-Time check
+## 3. Key Engineering Decisions
+- Comprehensive Unit Testing: High coverage across all layers using table-driven tests. Handlers are tested via httptest to verify boundaries without side effects.
 
-**Bank Simulator**
-- run "docker-compose up" to spin up the simulator
-- call http://localhost:8080/payments with POST
-- Example:
-    {
-        "card_number": "2222405343248877",
-        "expiry_date": "04/2025",
-        "currency": "GBP",
-        "amount": 100,
-        "cvv": "123"
-    }
-## API Design
-**Post Payment**
-- /v1/payments
-- Requested Fields in Request Body:
-    - card_number
-    - expiry_month
-    - expiry_year
-    - currency
-    - amount(int) -->why dont use string?
-    - cvv
-- We assume client will provide Idempotency Key, mandatorily
-- Requested Fields in Response Body:
+- Zero-Dependency Local Execution: Integrated alicebob/miniredis/v2 for a dynamic in-memory Redis instance. No external Docker network or Redis install required for native testing.
 
-**Get Payment Details**
-- /v1/payments/{paymentId}
-- Requested Fields in Request Body:
-    - paymentId(not idempotency key)
-- Requested Fields in Response Body:
-    - ID(payment id)
-    - Status(Authorized/ Declined)
-    - last four card digits
-    - expiry_month
-    - expiry_yesr
-    - currency
-    - amount
-- Assume GET payment when payment status is pending is impossible
+- Compile-Time Dependency Injection: Used google/wire to generate the dependency graph, ensuring missing dependencies fail at compile-time rather than runtime.
 
-**Development Order--Outward**
-1. Domain Layer: Start in internal/domain/. This is pure Go. No libraries, no JSON tags, no HTTP.
-2. Application Layer(Usecase): The "How", the entire application flow lies here
-3. Infrastructure Layer: fulfilling the contracts (interfaces) that the Domain and Use Cases already defined.
-4. Presentation Layer: The "delivery" (Dont forget to set timeout in context)
-4.5 logging and config file
-5. main.go& wire.go: Initialize the Logger and Config + Setup the Dependency Injection
-6. CI/CD
-## Storage Design
+- Idempotency via Middleware: POST /v1/payments is protected by IdempotencyMiddleware. Replayed requests return cached responses instantly, bypassing the Bank Simulator.
+
+- PCI-DSS Compliant Logging: Utilizes log/slog. Logs metadata and Correlation IDs while stripping sensitive JSON payload bodies (PAN/CVV) to prevent data leaks.
+
+- Two-Phase Validation:
+    - Structural: Gin’s Validator catches malformed fields (400 Bad Request).
+    - Domain: Entities catch business violations (e.g., expired cards) ensuring domain invariants.
+
+- Graceful Shutdown: Intercepts OS signals to allow a 10-second window for finishing active bank transactions.
+
+## 4. Deliberate Omissions
+- Persistent Database: For portability, an inmemory map was used for the PaymentRepository instead of PostgreSQL to reduce reviewer friction.
+
+- External Redis Container: Replaced with miniredis to provide a seamless "clone and run" experience.
+
+- Deep Context Logging: Piggybacking correlation IDs deep into Use Cases was scoped out to prevent over-engineering while maintaining core functionality.
+
+
+## 5. Design Discussions
+**ACID vs ACI in Test Doubles**
+While the in-memory map lacks Durability (data is lost on crash), we preserve Atomicity, Consistency, and Isolation (ACI). We use sync.RWMutex to prevent race conditions and ensure thread-safe isolation.
+
 **Why RDBMS over NoSQL?**
-- ACID is mission-critical for db transaction, and RDBMS could more easily implement ACID. 
+In production, a relational database is preferred. Strict ACID compliance is mission-critical for financial transactions to ensure money is never double-spent or lost. The "eventual consistency" of NoSQL is unacceptable for core payment ledgers.
 
-**You do not need to integrate with a real storage engine or database. It is fine to use the test double repository provided in the sample code to represent this.**
-- ACID, What's left?:
-    - Atomicity (A) and Isolation (I) could be achieved with Mutex
-    - Consistency (C) will move to Domain Layer
-    - Durability (D) is gone
+**Why we DO NOT cache GET requests**
+Caching GET /v1/payments/{id} is dangerous. If a refund or dispute modifies a payment status, a stale cache could lead a merchant to fulfill a canceled order. GET requests must always query the live Source of Truth.
 
-**Why GET payment should ignore the cache?**
-- the GET /v1/payments/{id} API must read directly from the Database (Repository), never the Cache. Here is why I think so:
-1. The Key Mismatch: When the client calls POST /v1/payments, they pass an Idempotency-Key in the HTTP header (e.g., req-abc). This is what the cache uses as its lookup key. But when they call GET /v1/payments/pay_123, they are passing the generated Payment ID. The cache literally has no idea what pay_123 is.
-2. The TTL (Time-to-Live): Idempotency is a temporary shield to prevent double-charging during network hiccups. The keys usually expire after 24 hours. If a merchant calls GET to look up a payment from 3 days ago, the cache will be empty. The database is permanent.
-3. The Source of Truth: If a background process refunds a payment, it updates the database. If I serve GET requests from a stale cache, I will be returning inaccurate financial data.
+**Future Scaling: Package by Feature**
+The current "Package by Layer" structure is ideal for this single-domain microservice. For expansion into Refunds or Payouts, the architecture would transition to Bounded Contexts (e.g., internal/payments/..., internal/refunds/...) to avoid horizontal layers becoming cluttered.
 
-## CI/CD Design
-**Partial CD plan and config injection**
-- App Code: Expects primitives injected via constructors (like baseURL string).
-- Main.go: Reads Environment Variables and builds a Config struct.
-- Dockerfile: Only builds the Go binary. No config mapping.
-- Docker-Compose: Injects the actual URL strings as environment variables when spinning up the containers
+## How to Run and Test
+The project is containerized for a friction-free setup.
 
-## Future Scaling & Architecture
-- For the scope of this assessment, the application is packaged by architectural layer (Clean Architecture) with a single, flat Domain package. If this service were to grow to encompass other domains (e.g., Refunds, Disputes), I would transition the structure to 'Package by Feature / Bounded Context' to prevent the Domain and Use Case packages from becoming bloated.
+**Step 1: Spin up the environment**
+`docker-compose up -d`
+
+**Step 2: Query the API**
+The API is exposed on port 8090.
+
+1. Process a Payment (POST)
+`
+curl -X POST http://localhost:8090/v1/payments \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: req-abc-123" \
+  -d '{
+    "card_number": "1234567890123456",
+    "expiry_month": 12,
+    "expiry_year": 2026,
+    "currency": "USD",
+    "amount": 1500,
+    "cvv": "123"
+  }'
+`
+
+2. Retrieve a Payment (GET)
+`
+curl -X GET http://localhost:8090/v1/payments/<PAYMENT_ID_FROM_POST_RESPONSE>
+`
+
+**Step 3: Test Idempotency**
+Run the exact same POST command from Step 1 again. The response will be returned instantly from the cache, bypassing the Bank Simulator.
