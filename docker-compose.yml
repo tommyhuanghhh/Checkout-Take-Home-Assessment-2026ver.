@@ -1,6 +1,20 @@
 version: "3.8"
 
 services:
+  # 1. The Payment Gateway API
+  api:
+    image: tommyhuanghhh/paymentgateway-gateway:latest # Replaced "build: ."
+    pull_policy: always # Ensures Docker always checks for the latest push
+    ports:
+      - "8090:8090"
+    environment:
+      # Injecting the Docker network URLs
+      - SERVER_PORT=8090
+      - BANK_SIMULATOR_URL=http://bank_simulator:8080
+    depends_on:
+      - bank_simulator
+
+  # 2. The Provided Bank Simulator
   bank_simulator:
     container_name: bank_simulator
     image: bbyars/mountebank:2.8.1
@@ -12,4 +26,3 @@ services:
       - type: bind
         source: ./imposters
         target: /imposters
-      
