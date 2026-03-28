@@ -70,6 +70,7 @@ func (h *PaymentHandler) ProcessPayment(c *gin.Context) {
 		Amount:             int(result.Amount),
 	}
 
+	c.Set(rest.ContextKeyPaymentID, result.ID)
 	c.JSON(http.StatusCreated, resp)
 }
 
